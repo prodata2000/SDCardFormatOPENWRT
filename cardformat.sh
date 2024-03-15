@@ -1,45 +1,39 @@
 #!/bin/sh
 
-# Function to check for missing dependencies and prompt the user to install them
+# Function to check for missing dependencies and offer to install them
 check_and_prompt_dependencies() {
-    local missing_counter=0
     for cmd in "$@"; do
         if ! command -v "$cmd" >/dev/null 2>&1; then
             echo "Command not found: $cmd"
-            missing_counter=$((missing_counter + 1))
             echo "Would you like to install $cmd? (yes/no)"
             read answer
             if [ "$answer" = "yes" ]; then
                 echo "Attempting to install $cmd..."
-                sudo opkg update && sudo opkg install "$cmd"
+                opkg update && opkg install "$cmd"
                 
                 # Check again if the command is available after attempting installation
                 if ! command -v "$cmd" >/dev/null 2>&1; then
                     echo "Failed to install $cmd. Please install it manually."
+                    exit 1
                 else
                     echo "$cmd installed successfully."
-                    missing_counter=$((missing_counter - 1))
                 fi
             else
-                echo "User chose not to install $cmd."
+                echo "User chose not to install $cmd. Exiting."
+                exit 1
             fi
         fi
     done
-    
-    if [ "$missing_counter" -ne 0 ]; then
-        echo "There are still missing required commands. Please resolve these issues before running the script again."
-        exit 1
-    fi
 }
 
 # List of required commands
-required_commands="lsblk parted mkfs.ext4 mkswap grep awk cut sudo fdisk"
+required_commands="lsblk parted mkfs.ext4 mkswap grep awk cut fdisk blockdev"
 
 # Check for all required commands and prompt the user for installation if any are missing
 check_and_prompt_dependencies $required_commands
 
 echo "Detecting devices with fdisk..."
-sudo fdisk -l 2>/dev/null | grep '^Disk /dev/' | cut -d ' ' -f 2 | tr -d ':'
+fdisk -l 2>/dev/null | grep '^Disk /dev/' | cut -d ' ' -f 2 | tr -d ':'
 
 echo "WARNING: This list includes all detected disks, including your system drive(s). Please select carefully to avoid data loss."
 echo "Enter the device path to work with (e.g., /dev/sdb):"
@@ -59,13 +53,13 @@ read formatting_option
 case $formatting_option in
     1)
         echo "Creating one large EXT4 partition..."
-        sudo parted /dev/$selected_device --script -- mkpart primary ext4 1MiB 100%
+        parted $selected_device --script -- mkpart primary ext4 1MiB 100%
         echo "Formatting partition..."
-        part1=$(ls /dev/${selected_device}* | grep -E "${selected_device}p?1$")
-        sudo mkfs.ext4 $part1
+        partprobe $selected_device 2>/dev/null || sleep 2
+        mkfs.ext4 ${selected_device}1
         ;;
     2)
-        device_size=$(sudo blockdev --getsize64 /dev/$selected_device)
+        device_size=$(blockdev --getsize64 $selected_device)
         device_size_mb=$((device_size / 1024 / 1024))
         part1_size_mb=$((device_size_mb * 70 / 100))
         swap_size_mb=$((device_size_mb - part1_size_mb))
@@ -82,14 +76,12 @@ case $formatting_option in
         fi
 
         echo "Creating partitions..."
-        sudo parted /dev/$selected_device --script -- mkpart primary ext4 1MiB ${part1_size_mb}MB
-        sudo parted /dev/$selected_device --script -- mkpart primary linux-swap ${part1_size_mb}MB 100%
+        parted $selected_device --script -- mkpart primary ext4 1MiB ${part1_size_mb}MB
+        parted $selected_device --script -- mkpart primary linux-swap ${part1_size_mb}MB 100%
         echo "Formatting partitions..."
-        sudo partprobe /dev/$selected_device 2>/dev/null || sleep 2
-        part1=$(ls /dev/${selected_device}* | grep -E "${selected_device}p?1$")
-        part2=$(ls /dev/${selected_device}* | grep -E "${selected_device}p?2$")
-        sudo mkfs.ext4 $part1
-        sudo mkswap $part2
+        partprobe $selected_device 2>/dev/null || sleep 2
+        mkfs.ext4 ${selected_device}1
+        mkswap ${selected_device}2
         ;;
     *)
         echo "Invalid option selected. Exiting."
