@@ -27,7 +27,7 @@ check_and_prompt_dependencies() {
 }
 
 # List of required commands
-required_commands="lsblk parted mkfs.ext4 mkswap grep awk cut fdisk blockdev"
+required_commands="lsblk parted mkfs.ext4 mkswap grep awk cut fdisk partprobe"
 
 # Check for all required commands and prompt the user for installation if any are missing
 check_and_prompt_dependencies $required_commands
@@ -50,16 +50,22 @@ echo "1) Entire device as EXT4"
 echo "2) 70% EXT4 and 30% as swap"
 read formatting_option
 
+# Create new GPT on the device to avoid "unrecognized disk label" error
+echo "Creating new GPT on $selected_device..."
+if ! sudo parted $selected_device --script mklabel gpt; then
+    echo "Failed to create GPT on $selected_device. Exiting."
+    exit 1
+fi
+
 case $formatting_option in
     1)
         echo "Creating one large EXT4 partition..."
-        parted $selected_device --script -- mkpart primary ext4 1MiB 100%
-        echo "Formatting partition..."
-        partprobe $selected_device 2>/dev/null || sleep 2
-        mkfs.ext4 ${selected_device}1
+        sudo parted $selected_device --script -- mkpart primary ext4 1MiB 100%
+        sudo partprobe $selected_device 2>/dev/null || sleep 2
+        sudo mkfs.ext4 ${selected_device}1
         ;;
     2)
-        device_size=$(blockdev --getsize64 $selected_device)
+        device_size=$(sudo blockdev --getsize64 $selected_device)
         device_size_mb=$((device_size / 1024 / 1024))
         part1_size_mb=$((device_size_mb * 70 / 100))
         swap_size_mb=$((device_size_mb - part1_size_mb))
@@ -76,12 +82,11 @@ case $formatting_option in
         fi
 
         echo "Creating partitions..."
-        parted $selected_device --script -- mkpart primary ext4 1MiB ${part1_size_mb}MB
-        parted $selected_device --script -- mkpart primary linux-swap ${part1_size_mb}MB 100%
-        echo "Formatting partitions..."
-        partprobe $selected_device 2>/dev/null || sleep 2
-        mkfs.ext4 ${selected_device}1
-        mkswap ${selected_device}2
+        sudo parted $selected_device --script -- mkpart primary ext4 1MiB ${part1_size_mb}MB
+        sudo parted $selected_device --script -- mkpart primary linux-swap ${part1_size_mb}MB 100%
+        sudo partprobe $selected_device 2>/dev/null || sleep 2
+        sudo mkfs.ext4 ${selected_device}1
+        sudo mkswap ${selected_device}2
         ;;
     *)
         echo "Invalid option selected. Exiting."
