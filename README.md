@@ -45,13 +45,3 @@ Contributions to improve the utility or address issues are welcome. Please feel 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
-
----
-
-### Additional Notes for README
-
-- **Customization:** You may want to add sections on how to contribute, report issues, or specific configurations and considerations related to OpenWRT devices.
-- **License:** I've assumed an MIT License for this example. Ensure you choose a license that suits your project's needs. GitHub offers a [guide to licensing](https://help.github.com/articles/licensing-a-repository/) that might be helpful.
-- **Formatting:** Markdown formatting allows you to make the README more readable and organized. Utilize headings, lists, code blocks, and links to improve clarity.
-
-Remember, a good README is key to engaging the community and encouraging use and contribution to your project.
